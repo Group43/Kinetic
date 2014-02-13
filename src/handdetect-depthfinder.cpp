@@ -24,22 +24,18 @@ using namespace std;
 const double scale = 1.1;
 const int minBody=50000;
 //1.0 api version
-CvMemStorage* storage = 0;
-CascadeClassifier cascade;
+MemStorage* storage = 0;
 void detectAndDraw(Mat input_image);
-const char* cascade_name = "fist.xml";
-
-//define the path to cascade file
-string cascadeName = "fist.xml"; /*ROBUST-fist detection haartraining file*/
 int count_position[4]= {0,0,0,0};
 int old_position[4]= {0,0,0,0}; 
 int oldpoint[2] = {0,0};
 int newpoint[2] = {0,0};
 int difference[2] = {0,0};
-int diff_threshold_tb = 80; 
-int diff_threshold_rl = 100;
+int diff_threshold_tb = 30; 
+int diff_threshold_rl = 40;
 int massThresh = 190;
-int massTimeout = 0;
+int massTimeout = 31;
+int powerTimeout = 0;
 int numPoints = 0;
 int main(int argc, char** argv)
 {
@@ -50,11 +46,6 @@ int main(int argc, char** argv)
 	Mat frame, frame_copy, image_size;
 	vector<Rect> faces;
 	vector< vector<Point> > contours;
-	cascade.load(cascade_name);
-	if( cascade.empty() ){
-		fprintf( stderr, "ERROR: Could not load classifier cascade\n" );
-		return -1;
-	}
 
 	// attempt to start the grabber
 	if(grabber.initialize())
@@ -94,13 +85,13 @@ int main(int argc, char** argv)
 			
 		threshold(depthImageDraw,depthImageDraw,200, 255,4);	//190
 		medianBlur(depthImageDraw,depthImageDraw,5);
-		imshow("trun1", depthImageDraw);	
+		//imshow("trun1", depthImageDraw);	
 		threshold(depthImageDraw,depthImageDraw,90, 255,3);
 		depthImageDraw.copyTo(depthBody);
-		imshow("trun2", depthImageDraw);
+		//imshow("trun2", depthImageDraw);
 		findContours(depthImageDraw,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
 
-		for( int i = 0; i < contours.size(); i++ ){	
+		/*for( int i = 0; i < contours.size(); i++ ){	
 			if (contourArea(contours[i])>40000 && contourArea(contours[i])<90000){	
 				
 				Moments mu = moments( contours[i], false ); 
@@ -118,7 +109,8 @@ int main(int argc, char** argv)
 		  	}
 		}
 		contours.clear();
-		threshold(depthBody,depthBody,massThresh-18, 255,4);	//190
+		threshold(depthBody,depthBody,massThresh-16, 255,4);	//190*/
+		threshold(depthBody,depthBody,170, 255,4);
 		imshow("8", depthBody);
 		findContours(depthBody,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
 		drawContours(colorImage,contours,-1,Scalar(0,0,255),2);
@@ -131,32 +123,75 @@ int main(int argc, char** argv)
 				mc[i] = Point2f( mu[i].m10/mu[i].m00 , mu[i].m01/mu[i].m00 );
 				circle( colorImage, mc[i], 4, Scalar(0,255,0), -1, 8, 0 );
 				if(mc[i].y < 400){
-				
+				numPoints++;
+				if(numPoints>1)
+					break;
 				newpoint[1] = mc[i].x;
 				newpoint[2] = mc[i].y;
-				
+				if(massTimeout>=2){
+					oldpoint[1] = newpoint[1];
+					oldpoint[2] = newpoint[2];
+				}
+				massTimeout=0;
 				difference[1] = newpoint[1]-oldpoint[1];
 				difference[2] = newpoint[2]-oldpoint[2];
 
-				if (difference[1] < -diff_threshold_rl)
+				if (difference[1] < -diff_threshold_rl/1.4 && difference[2] < -diff_threshold_tb/1.4)
 				{
+					circle( colorImage, Point(160,120), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Up");
 					cout << "RIGHT TO LEFT RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR \n";
+				}
+				else if (difference[1] > diff_threshold_rl/1.4 && difference[2] < -diff_threshold_tb/1.4) 
+				{
+					circle( colorImage, Point(480,120), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Down");
+					cout << "LEFT TO RIGHT LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n";
+
+				}
+				else if (difference[1] < -diff_threshold_rl/1.4 && difference[2] > diff_threshold_tb/1.4) 
+				{
+					circle( colorImage, Point(160,360), 40, Scalar(0,0,255), -1, 8, 0 );
+					//system("notify-send Channel-Up'");
+					cout << "TOP TO BOTTOM TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\n";
+
+				}
+				else if (difference[1] > diff_threshold_rl/1.4 && difference[2] > diff_threshold_tb/1.4) 
+				{
+					circle( colorImage, Point(480,360), 40, Scalar(0,0,255), -1, 8, 0 );
+					//system("notify-send Channel-Down");
+					cout << "BOTTOM TO TOP BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n";
+
 				}
 				else if (difference[1] > diff_threshold_rl) 
 				{
+					circle( colorImage, Point(480,240), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Down");
+					cout << "LEFT TO RIGHT LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n";
+
+				}
+				else if (difference[1] < -diff_threshold_rl) 
+				{
+					circle( colorImage, Point(160,240), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Down");
+					cout << "LEFT TO RIGHT LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n";
+
+				}
+				else if (difference[2] > diff_threshold_tb) 
+				{
+					circle( colorImage, Point(320,360), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Down");
 					cout << "LEFT TO RIGHT LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n";
 
 				}
 				else if (difference[2] < -diff_threshold_tb) 
 				{
-					cout << "TOP TO BOTTOM TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\n";
+					circle( colorImage, Point(320,120), 40, Scalar(255,0,0), -1, 8, 0 );
+					//system("notify-send Volume-Down");
+					cout << "LEFT TO RIGHT LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n";
 
 				}
-				else if (difference[2] > diff_threshold_tb) 
-				{
-					cout << "BOTTOM TO TOP BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n";
-
-				}
+				
 			
 				oldpoint[1] = newpoint[1];
 				oldpoint[2] = newpoint[2];				
@@ -168,7 +203,20 @@ int main(int argc, char** argv)
 		}	
 			
 	
-	imshow("rgb", colorImage);
+	
+	if(massTimeout<2)
+		massTimeout++;
+	if(numPoints>1){
+		powerTimeout++;
+	}else{powerTimeout=0;}
+	if(powerTimeout>20){
+		//putText(colorImage, "POWER OFF", Point(160,260), FONT_HERSHEY_COMPLEX, 2.0, Scalar(0,0,255), 1, CV_AA);
+		rectangle( colorImage, Point( 0,0 ),  Point( 640, 480),  Scalar( 0, 0, 0 ),  -1, 8 );
+		powerTimeout=21;
+		}
+	numPoints=0;
+	imshow("rgb", colorImage);	
+		
             }
         }
         else
